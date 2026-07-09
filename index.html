@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>업무 대시보드 - Firebase 동기화</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Firebase SDK (Compat 버전 - 브라우저에서 직접 실행 가능) -->
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.5.0/firebase-database-compat.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #0a0a0a 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .firebase-status {
+            display: inline-block;
+            background: #2d2d2d;
+            padding: 12px 20px;
+            border-radius: 6px;
+            font-size: 0.95em;
+            margin-top: 15px;
+            font-weight: 600;
+        }
+
+        .firebase-status.connected {
+            color: #4caf50;
+            border-left: 4px solid #4caf50;
+        }
+
+        .firebase-status.disconnected {
+            color: #f44336;
+            border-left: 4px solid #f44336;
+        }
+
+        .header-time {
+            font-size: 1.1em;
+            opacity: 0.9;
+            color: white;
+            margin-top: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            margin-bottom: 20px;
+        }
+
+        .card h2 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .card p {
+            color: #666;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .top5-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .top5-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .top5-item:hover {
+            background: #e8e8e8;
+        }
+
+        .top5-date {
+            font-weight: 700;
+            color: #667eea;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+        }
+
+        .top5-content {
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .top5-meta {
+            font-size: 0.8em;
+            color: #666;
+        }
+
+        .top5-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+        .btn {
+            padding: 6px 13px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        .btn-primary {
+            background: #667eea;
+        }
+
+        .btn-active {
+            background: #4a5cc4;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sync-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4caf50;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Firebase Configuration - 환경 변수 또는 별도 설정 파일에서 로드해야 함
+        // 보안상 API 키는 .env 파일 또는 서버에서 관리하세요
+        const getFirebaseConfig = () => {
+            // 개발 환경에서는 window.firebaseConfig를 사용
+            // 또는 .env 파일에서 로드
+            return window.firebaseConfig || {
+                apiKey: "YOUR_API_KEY",
+                authDomain: "YOUR_AUTH_DOMAIN",
+                projectId: "YOUR_PROJECT_ID",
+                databaseURL: "YOUR_DATABASE_URL",
+                storageBucket: "YOUR_STORAGE_BUCKET",
+                messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+                appId: "YOUR_APP_ID"
+            };
+        };
+
+        const firebaseConfig = getFirebaseConfig();
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const auth = firebase.auth();
+
+        const App = () => {
+            const [scheduleData, setScheduleData] = React.useState([]);
+            const [todoList, setTodoList] = React.useState([]);
+            const [currentTime, setCurrentTime] = React.useState(new Date());
+            const [viewMode, setViewMode] = React.useState('today');
+            const [firebaseConnected, setFirebaseConnected] = React.useState(false);
+            const [syncing, setSyncing] = React.useState(false);
+
+            // Firebase 익명 인증
+            React.useEffect(() => {
+                auth.signInAnonymously().catch(err => {
+                    console.error('인증 오류:', err);
+                });
+
+                // 연결 상태 감시
+                const connectedRef = database.ref('.info/connected');
+                connectedRef.on('value', (snap) => {
+                    setFirebaseConnected(snap.val() === true);
+                });
+
+                return () => {
+                    connectedRef.off();
+                };
+            }, []);
+
+            // Firebase에서 일정 데이터 로드 및 실시간 동기화
+            React.useEffect(() => {
+                const schedulesRef = database.ref('schedules');
+                
+                schedulesRef.on('value', (snapshot) => {
+                    if (snapshot.exists()) {
+                        const data = Object.values(snapshot.val());
+                        setScheduleData(data);
+                    }
+                });
+
+                return () => {
+                    schedulesRef.off();
+                };
+            }, []);
+
+            // Firebase에서 To Do 데이터 로드 및 실시간 동기화
+            React.useEffect(() => {
+                const todosRef = database.ref('todos');
+                
+                todosRef.on('value', (snapshot) => {
+                    if (snapshot.exists()) {
+                        const data = Object.values(snapshot.val());
+                        setTodoList(data);
+                    }
+                });
+
+                return () => {
+                    todosRef.off();
+                };
+            }, []);
+
+            // 시간 업데이트
+            React.useEffect(() => {
+                const timer = setInterval(() => {
+                    setCurrentTime(new Date());
+                }, 1000);
+                return () => clearInterval(timer);
+            }, []);
+
+            // Firebase에 일정 추가
+            const addScheduleToFirebase = (schedule) => {
+                setSyncing(true);
+                database.ref('schedules').push(schedule).then(() => {
+                    setSyncing(false);
+                }).catch(err => {
+                    console.error('저장 오류:', err);
+                    setSyncing(false);
+                });
+            };
+
+            // Firebase에 To Do 추가
+            const addTodoToFirebase = (todo) => {
+                setSyncing(true);
+                database.ref('todos').push(todo).then(() => {
+                    setSyncing(false);
+                }).catch(err => {
+                    console.error('저장 오류:', err);
+                    setSyncing(false);
+                });
+            };
+
+            return (
+                <div className="container">
+                    <div className="header">
+                        <h1>📅 업무 대시보드</h1>
+                        <div className="header-time">
+                            {currentTime.toLocaleString('ko-KR')}
+                        </div>
+                        <div className={`firebase-status ${firebaseConnected ? 'connected' : 'disconnected'}`}>
+                            <span className="sync-indicator"></span>
+                            {firebaseConnected ? '🔄 Firebase 동기화 연결됨' : '⚠️ Firebase 연결 끊김'}
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <h2>📊 현재 상태</h2>
+                        <p>✅ 일정: {scheduleData.length}개 | ✅ To Do: {todoList.length}개</p>
+                        {syncing && <p>⏳ 데이터 동기화 중...</p>}
+                    </div>
+
+                    <div className="card">
+                        <div className="button-group">
+                            <button className={`btn ${viewMode === 'today' ? 'btn-active' : 'btn-primary'}`} onClick={() => setViewMode('today')}>
+                                📆 오늘
+                            </button>
+                            <button className={`btn ${viewMode === 'week' ? 'btn-active' : 'btn-primary'}`} onClick={() => setViewMode('week')}>
+                                📊 주간
+                            </button>
+                            <button className={`btn ${viewMode === 'month' ? 'btn-active' : 'btn-primary'}`} onClick={() => setViewMode('month')}>
+                                📋 월간
+                            </button>
+                        </div>
+
+                        <h2>📅 일정 목록</h2>
+                        <div className="top5-list">
+                            {scheduleData.length > 0 ? (
+                                scheduleData.slice(0, 5).map((item, idx) => (
+                                    <div key={idx} className="top5-item">
+                                        <div className="top5-date">{item.date} {item.time || ''}</div>
+                                        <div className="top5-content">{item.content}</div>
+                                        {item.location && <div className="top5-meta">📍 {item.location}</div>}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="top5-empty">등록된 일정이 없습니다 🎉</div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <h2>✅ To Do List</h2>
+                        <div className="top5-list">
+                            {todoList.length > 0 ? (
+                                todoList.slice(0, 5).map((item, idx) => (
+                                    <div key={idx} className="top5-item">
+                                        <div className="top5-content">{item.text}</div>
+                                        <div className="top5-date">{item.date || ''}</div>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="top5-empty">등록된 To Do가 없습니다 ✨</div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <h2>📢 정보</h2>
+                        <p>🔄 <strong>실시간 동기화 활성화됨</strong></p>
+                        <p>다른 기기에서 추가한 일정과 To Do는 자동으로 표시됩니다.</p>
+                        <p style={{marginTop: '15px', fontSize: '0.9em', color: '#666'}}>
+                            💡 팁: PC와 모바일 앱에서 각각 데이터를 추가하면 자동으로 동기화됩니다.
+                        </p>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
