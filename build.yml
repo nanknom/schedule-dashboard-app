@@ -1,0 +1,65 @@
+name: Android APK Build
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Install dependencies
+      run: |
+        npm install -g cordova
+        npm install
+
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+
+    - name: Create index.html
+      run: |
+        cp schedule_dashboard_firebase.html www/index.html || mkdir -p www && cp schedule_dashboard_firebase.html www/index.html
+
+    - name: Build Android APK
+      run: |
+        cordova platform add android
+        cordova build android --release
+
+    - name: Sign APK
+      run: |
+        mkdir -p build
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+          -keystore ${{ secrets.KEYSTORE_FILE }} \
+          -storepass ${{ secrets.KEYSTORE_PASSWORD }} \
+          -keypass ${{ secrets.KEY_PASSWORD }} \
+          platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk \
+          ${{ secrets.KEY_ALIAS }} || \
+        cp platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk build/schedule-dashboard.apk
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: schedule-dashboard-apk
+        path: platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
+        retention-days: 30
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
