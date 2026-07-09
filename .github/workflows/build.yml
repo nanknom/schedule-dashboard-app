@@ -28,6 +28,9 @@ jobs:
           mkdir -p www
           cp index.html www/
       
+      - name: Add Android platform
+        run: cordova platform add android
+      
       - name: Build APK
         run: cordova build android --release
       
@@ -36,3 +39,5 @@ jobs:
         with:
           name: app-release
           path: platforms/android/app/build/outputs/apk/release/*.apk
+
+
