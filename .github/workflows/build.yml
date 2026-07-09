@@ -23,6 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       
+      - name: Create Cordova project structure
+        run: |
+          mkdir -p www
+          cp index.html www/
+      
       - name: Build APK
         run: cordova build android --release
       
