@@ -15,12 +15,10 @@
     <allow-intent href="mailto:*" />
     <allow-intent href="geo:*" />
     
-    <platform name="android">
-        <allow-intent href="market:*" />
-        <icon src="res/icon/android/icon-96-xhdpi.png" density="xhdpi" />
-        <splash src="res/screen/android/screen-xhdpi-portrait.png" density="port-xhdpi" />
-        <preference name="AndroidPersistentFileLocation" value="Compatibility" />
-    </platform>
+<platform name="android">
+    <allow-intent href="market:*" />
+    <preference name="AndroidPersistentFileLocation" value="Compatibility" />
+</platform>
 
     <engine name="android" spec="~12.0.0" />
 
